@@ -1,171 +1,136 @@
 import psycopg2
 import csv
-import string
 
-conn = psycopg2.connect(
-  host = 'localhost',
-  database = 'postgres',
-  user = 'postgres',
-  password = 'Erkin2006'
+# Настройка соединения с базой данных
+connection = psycopg2.connect(
+    host='localhost',
+    database='postgres',
+    user='postgres',
+    password='Erkin2006'
 )
-
-cur = conn.cursor()
-
-import csv
-
-filename = 'phone_book.csv'
+cursor = connection.cursor()
 
 
-with open(filename, 'w', newline='',encoding="utf8") as csvfile:
-    writer = csv.writer(csvfile)
-    writer.writerow(['Name', ' Phone'])
-    writer.writerow(['Anna',870712345])
-    writer.writerow(['Ivan',874701010])
-    writer.writerow(['Tomirsis',870100035])
-    writer.writerow(['Ayan',877755555])
-    print("CSV файл успешно создан.")
-
-def create_table():
-    create_query = """
+# Функция для создания таблицы в базе данных
+def initialize_table():
+    query = """
     CREATE TABLE IF NOT EXISTS phone_book (
         id SERIAL PRIMARY KEY,
         name VARCHAR(100) NOT NULL,
         phone VARCHAR(15) NOT NULL UNIQUE
     );
     """
-    cur.execute(create_query)
-    conn.commit()
-    print("Table 'phone_book' created successfully.")
+    cursor.execute(query)
+    connection.commit()
+    print("Table 'phone_book' is ready.")
 
-# Вызовите create_table() перед запуском основного меню
-create_table()
+initialize_table()
 
+# Поиск пользователя по номеру телефона
+def get_user_by_phone(phone):
+    cursor.execute("SELECT * FROM phone_book WHERE phone = %s;", (phone,))
+    return cursor.fetchone()
 
-def find_user_by_number(number):
-  select_query = f"select * from phone_book where phone = {number};"
-  cur.execute(select_query)
-  return cur.fetchone()
+# Поиск пользователя по имени
+def get_user_by_name(name):
+    cursor.execute("SELECT * FROM phone_book WHERE name = %s;", (name,))
+    return cursor.fetchone()
 
-def find_user_by_name(name):
-  select_query = f"select * from phone_book where name = '{name}';"
-  cur.execute(select_query)
-  return cur.fetchone()
+# Добавление нового пользователя
+def insert_user():
+    user_name = input("Enter user name: ")
+    user_phone = input("Enter user phone: ")
+    try:
+        cursor.execute("INSERT INTO phone_book (name, phone) VALUES (%s, %s);", (user_name, user_phone))
+        connection.commit()
+        print("New user added successfully.")
+    except psycopg2.Error as e:
+        print(f"Error: {e}")
 
-def add_new_user():
-  name = input("User name: ")
-  phone = int(input("User phone: "))
-  insert_query = f"INSERT INTO phone_book (name, phone) VALUES ('{name}', '{phone}');"
-  cur.execute(insert_query)
-  conn.commit()
-  print("User phone added sucsessfully!")
+# Обновление информации о пользователе
+def modify_user():
+    choice = input("Change name (N) or phone (P): ").strip().upper()
+    if choice == 'P':
+        old_phone = input("Enter current phone number: ")
+        if get_user_by_phone(old_phone):
+            new_phone = input("Enter new phone number: ")
+            cursor.execute("UPDATE phone_book SET phone = %s WHERE phone = %s;", (new_phone, old_phone))
+            connection.commit()
+            print("Phone updated successfully.")
+        else:
+            print("Phone not found.")
+    elif choice == 'N':
+        old_name = input("Enter current name: ")
+        if get_user_by_name(old_name):
+            new_name = input("Enter new name: ")
+            cursor.execute("UPDATE phone_book SET name = %s WHERE name = %s;", (new_name, old_name))
+            connection.commit()
+            print("Name updated successfully.")
+        else:
+            print("Name not found.")
 
-def update_userInfo():
-  answer = input("Write 'N' if you wanna change the user name or write 'P' if you wanna change the phone: ")
-  if answer == 'P':
-    number = int(input("Write the number which you wanna change: " ))
-    checked = find_user_by_number(number)
-    if (checked is not None):
-      new_number = int(input("Write new number: "))
-      update_number = f"update phone_book set phone = {new_number} where phone = '{number}';"
-      cur.execute(update_number)
-      conn.commit()
-      print("User phone changed sucsessfully!")
-    else:
-      print("User not found")
-  elif answer == 'N':
-    name = input("Write the name which you wanna change: " )
-    checked = find_user_by_name(name)
-    if (checked is not None):
-      new_name = input("Write new name: ")
-      update_name = f"update phone_book set name = '{new_name}' where name = '{name}';"
-      cur.execute(update_name)
-      conn.commit()
-      print("User name changed sucsessfully!")
-    else:
-      print("User not found")
+# Отображение данных
+def display_data():
+    print("1. Search by name")
+    print("2. Search by phone")
+    print("3. Show all users")
+    option = input("Choose an option: ")
+    if option == '1':
+        name = input("Enter name: ")
+        user = get_user_by_name(name)
+        print(f"Phone: {user[2]}" if user else "User not found.")
+    elif option == '2':
+        phone = input("Enter phone: ")
+        user = get_user_by_phone(phone)
+        print(f"Name: {user[1]}" if user else "User not found.")
+    elif option == '3':
+        cursor.execute("SELECT name, phone FROM phone_book;")
+        for row in cursor.fetchall():
+            print(f"{row[0]} - {row[1]}")
 
+# Удаление пользователя
+def remove_user():
+    option = input("Delete by name (N) or phone (P): ").strip().upper()
+    if option == 'P':
+        phone = input("Enter phone to delete: ")
+        if get_user_by_phone(phone):
+            cursor.execute("DELETE FROM phone_book WHERE phone = %s;", (phone,))
+            connection.commit()
+            print("User deleted successfully.")
+        else:
+            print("Phone not found.")
+    elif option == 'N':
+        name = input("Enter name to delete: ")
+        if get_user_by_name(name):
+            cursor.execute("DELETE FROM phone_book WHERE name = %s;", (name,))
+            connection.commit()
+            print("User deleted successfully.")
+        else:
+            print("Name not found.")
 
-def show_data():
-  q = """
-Choose the query:
-1 - find user by name
-2 - find user by phone number
-3 - Show all users with their phone numbers
-"""
-  query = int(input(q))
-  if query == 1:
-    name = input("Write user name: ")
-    checked = find_user_by_name(name)
-    if (checked is not None):
-      select_query = f"select phone from phone_book where name = '{name}';"
-      cur.execute(select_query)
-      print(f"Users phone is: {cur.fetchone()[0]}")
-    else:
-      print("User not found")
-  elif query == 2:
-    phone = int(input("Write user phone: "))
-    checked = find_user_by_number(phone)
-    if (checked is not None):
-      select_query = f"select name from phone_book where phone = {phone};"
-      cur.execute(select_query)
-      print(f"Users name is: {cur.fetchone()[0]}")
-    else:
-      print("User not found")
-  elif query == 3:
-    cur.execute(f"select name from phone_book;")
-    names = cur.fetchall()
-    cur.execute(f"select phone from phone_book;")
-    phones = cur.fetchall()
-    print("Names      Phone numbers")
-    for x in range(len(names)):
-      print(f"{names[x][0]}:       {phones[x][0]}")
-
-def delete_users():
-  answer = input("Write 'N' if you wanna delete user by name or write 'P' if you wanna delete user by phone: ")
-  if answer == 'P':
-    number = int(input("Write the number which you wanna delete: " ))
-    checked = find_user_by_number(number)
-    if (checked is not None):
-      delete_number = f"delete from phone_book where phone = '{number}';"
-      cur.execute(delete_number)
-      conn.commit()
-      print("User phone deleted sucsessfully!")
-    else:
-      print("User not found")
-  elif answer == 'N':
-    name = input("Write the name which you wanna delete: " )
-    checked = find_user_by_name(name)
-    if (checked is not None):
-      delete_name = f"delete from phone_book where name = '{name}';"
-      cur.execute(delete_name)
-      conn.commit()
-      print("User name deleted sucsessfully!")
-    else:
-      print("User not found")
-
-if __name__ == '__main__':
-    create_table()  # Убедитесь, что таблица создана
-
+# Основное меню программы
 def main():
-  menu = """
-Choose the number:
-1 - add new phone user
-2 - change user phone or name
-3 - query
-4 - delete users
-"""
+    while True:
+        print("\nMenu:")
+        print("1. Add new user")
+        print("2. Update user")
+        print("3. Display data")
+        print("4. Delete user")
+        print("5. Exit")
+        choice = input("Select an option: ").strip()
+        if choice == '1':
+            insert_user()
+        elif choice == '2':
+            modify_user()
+        elif choice == '3':
+            display_data()
+        elif choice == '4':
+            remove_user()
+        elif choice == '5':
+            break
+        else:
+            print("Invalid choice. Try again.")
 
-  start = int(input(menu))
-  if start == 1:
-    add_new_user()
-  elif start == 2:
-    update_userInfo()
-  elif start == 3:
-    show_data()
-  elif start == 4:
-    delete_users()
-    
-if __name__ == '__main__':
-  main()
-
-conn.close()
+if __name__ == "__main__":
+    main()
+    connection.close()
